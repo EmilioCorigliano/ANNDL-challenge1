@@ -14,6 +14,8 @@ import tensorflow as tf
 import numpy as np
 import os
 import random
+import matplotlib as mpl
+import seaborn as sns
 # import pandas as pd
 # import seaborn as sns
 # import matplotlib as mpl
@@ -31,10 +33,10 @@ import random
 # from PIL import Image
 # from time import time
 import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix, classification_report
+from tensorflow.python.keras.callbacks import TensorBoard
 
-# from sklearn.model_selection import train_test_split
-# from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
-# from tensorflow.python.keras.callbacks import TensorBoard
+mpl.use('Qt5Agg')
 
 """
 !pip install visualkeras
@@ -68,9 +70,18 @@ if gpus:
 preprocessing_function = tf.keras.applications.vgg19.preprocess_input
 preprocessing_function_name = "vgg19"
 seed = 42
+
+# font
+font = {'family' : 'DejaVu Sans',
+        'weight' : 'bold',
+        'size'   : 22}
+
+mpl.rc('font', **font)
+
 # dataset
-dataset_dir = "./"
+dataset_dir = "/Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/Database"
 training_dir = os.path.join(dataset_dir, 'training_data_final')
+
 # define labels
 labels = ['species 1',  # 0
           'species 2',  # 1
@@ -80,10 +91,10 @@ labels = ['species 1',  # 0
           'species 6',  # 5
           'species 7',  # 6
           'species 8']  # 7
+
 # if path_tl=="" then we make the transfer learning part, otherwise we use the path to load that
-path_tl = "C:\\Users\\emili\\OneDrive - Politecnico di Milano" \
-          "\\Desktop\\Backup\\POLITECNICO\\5ANNO\\1-ANNDL\\laboratory\\data_augmentation_challenge_1" \
-          "\\CNN_Aug_tl_Best_Nov21_22-51-21"
+
+path_tl = "/Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/transfer_learning_challenge_1/CNN_Aug_tl_Best_0_5"
 
 random.seed(seed)
 os.environ['PYTHONHASHSEED'] = str(seed)
@@ -91,12 +102,9 @@ np.random.seed(seed)
 tf.random.set_seed(seed)
 tf.compat.v1.set_random_seed(seed)
 
-## create instance without augmentation
+## """VISUALIZE BATCH"""
 
-"""
-VISUALIZE BATCH
-"""
-
+batch_size = 8
 
 def get_next_batch(generator):
     batch = next(generator)
@@ -121,8 +129,8 @@ def get_next_batch(generator):
     return batch
 
 
-def create_folders_and_callbacks(model_name):
-    exps_dir = os.path.join(dataset_dir, 'data_augmentation_tl_challenge_1')
+def create_folders_and_callbacks(model_name, target_dir, patience):
+    exps_dir = os.path.join(target_dir, 'data_augmentation_tl_challenge_1')
     if not os.path.exists(exps_dir):
         os.makedirs(exps_dir)
 
@@ -159,7 +167,7 @@ def create_folders_and_callbacks(model_name):
 
     # Early Stopping
     # --------------
-    es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=20, mode='max',
+    es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=patience, mode='max',
                                                    restore_best_weights=True)
     callbacks.append(es_callback)
 
@@ -179,8 +187,7 @@ plot_data_gen = plot_dataset()
 # Get a sample from dataset and show info
 _ = get_next_batch(plot_data_gen)
 
-"""NO AUGMENTATION"""
-
+## """NO AUGMENTATION"""
 
 def no_augmentation():
     noaug_train_data_gen = ImageDataGenerator(rescale=1 / 255., validation_split=0.2,
@@ -206,8 +213,7 @@ def no_augmentation():
 
 [noaug_train_gen, noaug_valid_gen] = no_augmentation()
 
-"""AUGMENTATION"""
-
+## """AUGMENTATION"""
 
 def augmentation():
     aug_train_data_gen = ImageDataGenerator(rotation_range=30,
@@ -251,7 +257,7 @@ def augmentation():
     flipped = gen.apply_transform(image, flip_t)
 
     # Plot original and augmented images
-    fig, ax = plt.subplots(1, 5, figsize=(15, 45))
+    fig, ax = plt.subplots(1, 5, figsize=(25, 10))
     ax[0].imshow(np.uint8(image))
     ax[0].set_title('Original')
     ax[1].imshow(np.uint8(rotated))
@@ -263,7 +269,7 @@ def augmentation():
     ax[4].imshow(np.uint8(flipped))
     ax[4].set_title('Flipped')
 
-    ## Combine multiple transformations
+    # Combine multiple transformations
     gen = ImageDataGenerator(rotation_range=30,
                              height_shift_range=50,
                              width_shift_range=50,
@@ -280,7 +286,7 @@ def augmentation():
     augmented = gen.apply_transform(image, t)
 
     # Plot original and augmented images
-    fig, ax = plt.subplots(1, 2, figsize=(15, 30))
+    fig, ax = plt.subplots(1, 2, figsize=(30, 15))
     ax[0].imshow(np.uint8(image))
     ax[0].set_title("Original")
     ax[1].imshow(np.uint8(augmented))
@@ -292,13 +298,12 @@ def augmentation():
 
 aug_train_gen = augmentation()
 
-"""TRANSFER LEARNING"""
-
+## """TRANSFER LEARNING"""
 
 def transfer_learning_vgg19():
     print("*** TRANSFER LEARNING ***")
 
-    ## download and plot preprocessing_function_name model
+    # download and plot preprocessing_function_name model
     vgg19 = tfk.applications.vgg19.VGG19(
         include_top=False,
         weights="imagenet",
@@ -309,6 +314,7 @@ def transfer_learning_vgg19():
     # Use vgg19 as feature extractor
     vgg19.trainable = False
 
+    # Add dense top
     inputs = tfk.Input(shape=(96, 96, 3))
     x = tfkl.Resizing(96, 96, interpolation="bicubic")(inputs)
     x = vgg19(x)
@@ -325,8 +331,8 @@ def transfer_learning_vgg19():
         activation='softmax',
         kernel_initializer=tfk.initializers.GlorotUniform(seed))(x)
 
-    # Create folders and callbacks and fit
-    aug_tl_callbacks = create_folders_and_callbacks(model_name='CNN_Aug_tl')
+    # Create folders and callbacks
+    aug_tl_callbacks = create_folders_and_callbacks(model_name='CNN_Aug_tl', target_dir=dataset_dir, patience=20)
 
     # Connect input and output through the Model class
     aug_tl_model = tfk.Model(inputs=inputs, outputs=outputs, name="vgg19")
@@ -346,13 +352,13 @@ def transfer_learning_vgg19():
         callbacks=aug_tl_callbacks,
     ).history
 
-    ## Save best epoch model
+    # Save best epoch model
     now = datetime.now().strftime('%b%d_%H-%M-%S')
     filename = dataset_dir + "/data_augmentation_challenge_1/CNN_Aug_tl_vgg19_Best_" + str(now)
     aug_tl_model.save(filename)
     del aug_tl_model
 
-    ## Plot the training
+    # Plot the training
     plt.figure(figsize=(15, 5))
     plt.plot(aug_tl_history['loss'], alpha=.3, color='#4D61E2', linestyle='--')
     plt.plot(aug_tl_history['val_loss'], label='Transfer Learning', alpha=.8, color='#4D61E2')
@@ -370,18 +376,17 @@ def transfer_learning_vgg19():
     plt.show()
     return filename
 
-
 if not path_tl:
     path_tl = transfer_learning_vgg19()
     print(path_tl)
 
 
-"""FINE TUNING"""
 
+## """FINE TUNING"""
 
 def fine_tuning(path):
     print("*** FINE TUNING ***")
-    epochs = 300
+    epochs = 1000
 
     # Re-load the model after transfer learning
     aug_ft_model = tfk.models.load_model(path)
@@ -392,8 +397,8 @@ def fine_tuning(path):
     for i, layer in enumerate(aug_ft_model.get_layer('vgg19').layers):
         print(i, layer.name, layer.trainable)
 
-    # Freeze first N layers, e.g., until 15th
-    for i, layer in enumerate(aug_ft_model.get_layer('vgg19').layers[-7:]):
+    # Freeze first N layers
+    for i, layer in enumerate(aug_ft_model.get_layer('vgg19').layers[:0]):
         layer.trainable = False
     for i, layer in enumerate(aug_ft_model.get_layer('vgg19').layers):
         print(i, layer.name, layer.trainable)
@@ -404,7 +409,7 @@ def fine_tuning(path):
                          metrics='accuracy')
 
     # Create folders and callbacks and fit
-    aug_ft_callbacks = create_folders_and_callbacks(model_name='CNN_Aug_ft')
+    aug_ft_callbacks = create_folders_and_callbacks(model_name='CNN_Aug_ft',target_dir=dataset_dir,patience=50)
 
     # Fine-tune the model
     aug_ft_history = aug_ft_model.fit(
@@ -431,15 +436,48 @@ def fine_tuning(path):
 
     plt.show()
 
-    ## Save best epoch model
+    # Save best epoch model
     now = datetime.now().strftime('%b%d_%H-%M-%S')
     save_path = dataset_dir + "/data_augmentation_challenge_1/CNN_Aug_ft_Best_" + str(now)
     aug_ft_model.save(save_path)
     return save_path
 
-
 path_ft = fine_tuning(path_tl)
 print(path_ft)
 
+## """CONFUSION MATRIX"""
+
+path_ft = "/Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/transfer_learning_challenge_1" \
+          "/CNN_Aug_ft_Best_0_9_3"
+
+def confusion_matrix_plot(path,dataset):
+    print("*** CONFUSION MATRIX ***")
+
+    model = tfk.models.load_model(path)
+
+    n_images = dataset.n
+
+    # Confution Matrix and Classification Report
+    Y_pred = model.predict(dataset, batch_size=8)
+    y_pred = np.argmax(Y_pred, axis=-1)
+    print('Confusion Matrix')
+    cm = confusion_matrix(dataset.classes, y_pred)
+    print('Classification Report')
+    target_names = labels
+    print(classification_report(dataset.classes, y_pred, target_names=target_names))
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(30, 25))
+    sns.heatmap(cm.T, xticklabels=list(labels), yticklabels=list(labels))
+    plt.xlabel('True labels')
+    plt.ylabel('Predicted labels')
+    plt.show()
+
+confusion_matrix_plot(path_tl,noaug_valid_gen)
+
+confusion_matrix_plot(path_ft,noaug_valid_gen)
+
+##
+
 # tensorboard
-# !tensorboard --logdir
+# tensorboard --logdir /Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/Database/data_augmentation_tl_challenge_1
