@@ -17,6 +17,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 
+tfk = tf.keras
+tfkl = tf.keras.layers
+
 """
 !pip install visualkeras
 !pip install scikit-learn
@@ -29,11 +32,9 @@ from sklearn.metrics import confusion_matrix, classification_report
 !pip install google.colab
 """
 
-tfk = tf.keras
-tfkl = tf.keras.layers
 print(tf.__version__)
 
-# USE GPUS
+# use GPUS in local computer
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     # Restrict TensorFlow to only use the first GPU
@@ -45,23 +46,30 @@ if gpus:
         # Visible devices must be set before GPUs have been initialized
         print(e)
 
-"""PARAMETERS"""
+## """PARAMETERS"""
+
+# path definitions
+dataset_dir = "C:\\Users\\emili\\OneDrive - Politecnico di " \
+              "Milano\\Desktop\\Backup\\POLITECNICO\\5ANNO\\1-ANNDL\\laboratory\\ANNDL-challenge1"
+training_dir = os.path.join(dataset_dir, 'training_data_final')
+# if path_tl=="" then we perform the transfer learning part, otherwise we use the path_tl to load that
+path_tl = os.path.join(dataset_dir, "data_augmentation_tl_challenge_1\\CNN_Aug_tl_Best_Nov21_22-51-21")
+# if path_ft=="" then we perform the fine tuning part, otherwise we use the path_ft to load that
+path_ft = os.path.join(dataset_dir, "data_augmentation_tl_challenge_1\\CNN_Aug_ft_Best_Nov24_11-10-41")
+
+# preprocessing
 preprocessing_function = tf.keras.applications.vgg19.preprocess_input
 preprocessing_function_name = "vgg19"
+
+# other parameters
 seed = 42
 batch_size = 8
 
-# font
-font = {'family': 'DejaVu Sans',
-        'weight': 'bold',
-        'size': 22}
-
-mpl.use('Qt5Agg')
-mpl.rc('font', **font)
-
-# path definitions
-dataset_dir = "/Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/Database"
-training_dir = os.path.join(dataset_dir, 'training_data_final')
+random.seed(seed)
+os.environ['PYTHONHASHSEED'] = str(seed)
+np.random.seed(seed)
+tf.random.set_seed(seed)
+tf.compat.v1.set_random_seed(seed)
 
 # define labels
 labels = ['species 1',  # 0
@@ -73,15 +81,13 @@ labels = ['species 1',  # 0
           'species 7',  # 6
           'species 8']  # 7
 
-# if path_tl=="" then we make the transfer learning part, otherwise we use the path to load that
-path_tl = "/Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/transfer_learning_challenge_1" \
-          "/CNN_Aug_tl_Best_0_5 "
+# other settings
+font = {'family': 'DejaVu Sans',
+        'weight': 'bold',
+        'size': 22}
+# mpl.use('Qt5Agg')
+mpl.rc('font', **font)
 
-random.seed(seed)
-os.environ['PYTHONHASHSEED'] = str(seed)
-np.random.seed(seed)
-tf.random.set_seed(seed)
-tf.compat.v1.set_random_seed(seed)
 
 ## """VISUALIZE BATCH"""
 
@@ -396,6 +402,7 @@ def transfer_learning_vgg19():
 
 
 if not path_tl:
+    # If the path_tl is empty do the transfer learning phase, otherwise go directly to ft
     path_tl = transfer_learning_vgg19()
     print(path_tl)
 
@@ -467,13 +474,13 @@ def fine_tuning(path):
     return save_path
 
 
-path_ft = fine_tuning(path_tl)
-print(path_ft)
+if not path_ft:
+    # If the path_ft is empty do the fine tuning phase, otherwise go directly to the outcomes
+    path_ft = fine_tuning(path_tl)
+    print(path_ft)
+
 
 ## """CONFUSION MATRIX"""
-
-path_ft = "/Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/transfer_learning_challenge_1" \
-          "/CNN_Aug_ft_Best_0_9_3"
 
 
 def confusion_matrix_plot(path, dataset):
@@ -504,10 +511,7 @@ def confusion_matrix_plot(path, dataset):
 
 
 confusion_matrix_plot(path_tl, noaug_valid_gen)
-
 confusion_matrix_plot(path_ft, noaug_valid_gen)
-
-##
 
 # tensorboard
 # tensorboard --logdir /Users/aless/PycharmProjects/pythonProject/ANN2DL-Challenge_1/Database/data_augmentation_tl_challenge_1
